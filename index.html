@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Enhanced Earthquake Visualization</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+ 
+    <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        .legend {
+            padding: 10px;
+            line-height: 18px;
+            color: #555;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        .legend i {
+            float: left;
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        .leaflet-bottom.leaflet-left {
+            width: 90%;
+        }
+        .leaflet-control-container .leaflet-timeline-controls {
+            width: 100%;
+            box-sizing: border-box;
+            margin: 0;
+            margin-bottom: 15px;
+        }
+        .info {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+ 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+    <!-- D3 JavaScript -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+ 
+    <script>
+        // Define base maps
+        const baseMaps = {
+            "Street Map": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }),
+ 
+            "Topographic Map": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>'
+            }),
+ 
+            "Night View": L.tileLayer('https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/{time}/{tilematrixset}{maxZoom}/{z}/{y}/{x}.{format}', {
+                attribution: 'Imagery provided by services from the Global Imagery Browse Services (GIBS), operated by the NASA/GSFC/Earth Science Data and Information System (<a href="https://earthdata.nasa.gov">ESDIS</a>) with funding provided by NASA/HQ',
+                bounds: [[-85.0511287776, -179.999999975], [85.0511287776, 179.999999975]],
+                minZoom: 1,
+                maxZoom: 8,
+                format: 'jpg',
+                time: '',
+                tilematrixset: 'GoogleMapsCompatible_Level'
+            }),
+ 
+            "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            })
+        };
+ 
+        // Initialize map
+        let map = L.map("map", {
+            center: [40.7, -94.5],
+            zoom: 3,
+            layers: [baseMaps["Street Map"]] // Default base map
+        });
+ 
+        // Create layer groups
+        let earthquakes = new L.LayerGroup();
+        let tectonicPlates = new L.LayerGroup();
+ 
+        // Define overlay maps
+        const overlayMaps = {
+            "Earthquakes": earthquakes,
+            "Tectonic Plates": tectonicPlates
+        };
+ 
+        // Add layer control
+        L.control.layers(baseMaps, overlayMaps, {
+            collapsed: false
+        }).addTo(map);
+ 
+        // Style function for earthquakes
+        function styleInfo(feature) {
+            return {
+                opacity: 1,
+                fillOpacity: 1,
+                fillColor: getColor(feature.geometry.coordinates[2]),
+                color: "#000000",
+                radius: getRadius(feature.properties.mag),
+                stroke: true,
+                weight: 0.5
+            };
+        }
+ 
+        // Color function based on depth
+        function getColor(depth) {
+            switch (true) {
+                case depth > 90: return "#ea2c2c";
+                case depth > 70: return "#ea822c";
+                case depth > 50: return "#ee9c00";
+                case depth > 30: return "#eecc00";
+                case depth > 10: return "#d4ee00";
+                default: return "#98ee00";
+            }
+        }
+ 
+        // Radius function based on magnitude
+        function getRadius(magnitude) {
+            return magnitude === 0 ? 1 : magnitude * 4;
+        }
+ 
+        // Fetch earthquake data
+        d3.json("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson")
+            .then(function(data) {
+                L.geoJson(data, {
+                    pointToLayer: function(feature, latlng) {
+                        return L.circleMarker(latlng);
+                    },
+                    style: styleInfo,
+                    onEachFeature: function(feature, layer) {
+                        layer.bindPopup(
+                            "<h3>Location: " + feature.properties.place + "</h3>" +
+                            "<hr>" +
+                            "<p>Magnitude: " + feature.properties.mag + "</p>" +
+                            "<p>Depth: " + feature.geometry.coordinates[2] + " km</p>" +
+                            "<p>Time: " + new Date(feature.properties.time).toLocaleString() + "</p>"
+                        );
+                    }
+                }).addTo(earthquakes);
+ 
+                // Add earthquake layer to map
+                earthquakes.addTo(map);
+ 
+                // Create legend
+                let legend = L.control({ position: "bottomright" });
+ 
+                legend.onAdd = function() {
+                    let div = L.DomUtil.create("div", "info legend");
+                    let grades = [-10, 10, 30, 50, 70, 90];
+                    let colors = [
+                        "#98ee00",
+                        "#d4ee00",
+                        "#eecc00",
+                        "#ee9c00",
+                        "#ea822c",
+                        "#ea2c2c"
+                    ];
+ 
+                    div.innerHTML = "<h4>Depth (km)</h4>";
+ 
+                    for (let i = 0; i < grades.length; i++) {
+                        div.innerHTML +=
+                            '<i style="background: ' + colors[i] + '"></i> ' +
+                            grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+                    }
+ 
+                    return div;
+                };
+ 
+                legend.addTo(map);
+            });
+ 
+        // Fetch and add tectonic plates data
+        d3.json("https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json")
+            .then(function(plateData) {
+                L.geoJson(plateData, {
+                    color: "#ff6500",
+                    weight: 2
+                }).addTo(tectonicPlates);
+ 
+                // Add tectonic plates layer to map
+                tectonicPlates.addTo(map);
+            });
+    </script>
+</body>
+</html>
